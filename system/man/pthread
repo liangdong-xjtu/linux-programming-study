@@ -1,0 +1,66 @@
+
+pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                          void *(*start_routine) (void *), void *arg);
+                          
+pthread_t *thread 是 子线程ID
+pthread_attr_t 由 pthread_attr_init 初始化，NULL 为 默认属性
+
+
+子线程的退出条件:
+1）子线程调 pthread_exit 后，返回调 pthread_join 的主线程 
+2）从 start_routine 中退出
+3）pthread_cancel 被取消
+4）任意子线程调 exit 或者主线程从 main 中返回，可造成全部线程终止
+
+子线程继承:
+pthread_sigmask
+sigpending: set of pending signals for the new thread is empty 
+fenv: floating-point environment
+不继承：
+sigaltstack
+
+pthread_getcpuclockid: 子线程的初始CPU-time clock 是0
+
+返回值:
+EAGAIN: 资源不足/线程数达上限
+        setrlimit 设置的某个user ID的 线程数达上限
+        /proc/sys/kernel/threads-max 内核中限制达上限
+EINVAL: attr 中有无效参数
+EPERM: attr 没有权限设置 attr 中指定的调度策略或者参数
+
+pthread_self: Unless under real-time scheduling policies,
+并不确定创建线程之后父线程和子线程谁先执行
+
+线程的join和detach
+joinable 子线程：调用 pthread_join 可以获取子线程的返回值，然后释放资源
+detached 子线程：无法获取子线程的返回值，资源自动释放，适合 daemon threads
+pthread_attr_setdetachstate
+    默认创建的是 joinable，除非在 attr 中设置为 detached
+
+pthread_attr_setstacksize 可以设置线程stack size
+    ulimit -s 8192 默认的 stack size limit is 8 MB 
+    
+man pthreads 可以查看 POXIS pthread 标准
+
+SEE ALSO
+       getrlimit(2), pthread_attr_init(3), pthread_cancel(3), pthread_detach(3),
+       pthread_equal(3), pthread_exit(3), pthread_getattr_np(3), pthread_join(3),
+       pthread_self(3), pthreads(7)
+       
+http://blog.csdn.net/zhangxinrun/article/details/5958742
+
+在内核2.6以前的调度实体都是进程，内核并没有真正支持线程。
+它是能过一个系统调用clone()来实现的，这个调用创建了一份调用进程的拷贝，
+跟fork()不同的是,这份进程拷贝完全共享了调用进程的地址空间。
+LinuxThread就是通过这个系统调用来提供线程在内核级的支持的
+(许多以前的线程实现都完全是在用户态，内核根本不知道线程的存在)。
+非常不幸的是，这种方法有相当多的地方没有遵循POSIX标准，
+特别是在信号处理，调度，进程间通信原语等方面。
+
+NPTL使用了跟LinuxThread相同的办法，在内核里面线程仍然被当作是一个进程，
+并且仍然使用了clone()系统调用(在NPTL库里调用)。
+但是，NPTL需要内核级的特殊支持来实现，比如需要挂起然后再唤醒线程的线程同步原语futex.
+
+NPTL也是一个1*1的线程库，就是说，当你使用pthread_create()调用创建一个线程后，
+在内核里就相应创建了一个调度实体，在linux里就是一个新进程，
+这个方法最大可能的简化了线程的实现。
